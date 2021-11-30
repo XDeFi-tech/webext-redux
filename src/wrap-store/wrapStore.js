@@ -2,11 +2,16 @@ import {
   DISPATCH_TYPE,
   STATE_TYPE,
   PATCH_STATE_TYPE,
-  DEFAULT_PORT_NAME
-} from '../constants';
-import { withSerializer, withDeserializer, noop } from "../serialization";
-import {getBrowserAPI} from '../util';
-import shallowDiff from '../strategies/shallowDiff/diff';
+  DEFAULT_PORT_NAME,
+} from "../constants";
+import {
+  withSerializer,
+  withDeserializer,
+  noop,
+  cloneDeepSerializer,
+} from "../serialization";
+import { getBrowserAPI } from "../util";
+import shallowDiff from "../strategies/shallowDiff/diff";
 
 /**
  * Responder for promisified results
@@ -15,19 +20,18 @@ import shallowDiff from '../strategies/shallowDiff/diff';
  * @return {undefined}
  */
 const promiseResponder = (dispatchResult, send) => {
-  Promise
-    .resolve(dispatchResult)
+  Promise.resolve(dispatchResult)
     .then((res) => {
       send({
         error: null,
-        value: res
+        value: res,
       });
     })
     .catch((err) => {
-      console.error('error dispatching result:', err);
+      console.error("error dispatching result:", err);
       send({
         error: err.message,
-        value: null
+        value: null,
       });
     });
 };
@@ -35,9 +39,9 @@ const promiseResponder = (dispatchResult, send) => {
 const defaultOpts = {
   portName: DEFAULT_PORT_NAME,
   dispatchResponder: promiseResponder,
-  serializer: noop,
+  serializer: cloneDeepSerializer,
   deserializer: noop,
-  diffStrategy: shallowDiff
+  diffStrategy: shallowDiff,
 };
 
 /**
@@ -45,24 +49,29 @@ const defaultOpts = {
  * @param {Object} store A Redux store
  * @param {Object} options An object of form {portName, dispatchResponder, serializer, deserializer}, where `portName` is a required string and defines the name of the port for state transition changes, `dispatchResponder` is a function that takes the result of a store dispatch and optionally implements custom logic for responding to the original dispatch message,`serializer` is a function to serialize outgoing message payloads (default is passthrough), `deserializer` is a function to deserialize incoming message payloads (default is passthrough), and diffStrategy is one of the included diffing strategies (default is shallow diff) or a custom diffing function.
  */
-export default (store, {
-  portName = defaultOpts.portName,
-  dispatchResponder = defaultOpts.dispatchResponder,
-  serializer = defaultOpts.serializer,
-  deserializer = defaultOpts.deserializer,
-  diffStrategy = defaultOpts.diffStrategy
-} = defaultOpts) => {
+export default (
+  store,
+  {
+    portName = defaultOpts.portName,
+    dispatchResponder = defaultOpts.dispatchResponder,
+    serializer = defaultOpts.serializer,
+    deserializer = defaultOpts.deserializer,
+    diffStrategy = defaultOpts.diffStrategy,
+  } = defaultOpts
+) => {
   if (!portName) {
-    throw new Error('portName is required in options');
+    throw new Error("portName is required in options");
   }
-  if (typeof serializer !== 'function') {
-    throw new Error('serializer must be a function');
+  if (typeof serializer !== "function") {
+    throw new Error("serializer must be a function");
   }
-  if (typeof deserializer !== 'function') {
-    throw new Error('deserializer must be a function');
+  if (typeof deserializer !== "function") {
+    throw new Error("deserializer must be a function");
   }
-  if (typeof diffStrategy !== 'function') {
-    throw new Error('diffStrategy must be one of the included diffing strategies or a custom diff function');
+  if (typeof diffStrategy !== "function") {
+    throw new Error(
+      "diffStrategy must be one of the included diffing strategies or a custom diff function"
+    );
   }
 
   const browserAPI = getBrowserAPI();
@@ -73,7 +82,7 @@ export default (store, {
   const dispatchResponse = (request, sender, sendResponse) => {
     if (request.type === DISPATCH_TYPE && request.portName === portName) {
       const action = Object.assign({}, request.payload, {
-        _sender: sender
+        _sender: sender,
       });
 
       let dispatchResult = null;
@@ -91,14 +100,16 @@ export default (store, {
   };
 
   /**
-  * Setup for state updates
-  */
+   * Setup for state updates
+   */
   const connectState = (port) => {
     if (port.name !== portName) {
       return;
     }
 
-    const serializedMessagePoster = withSerializer(serializer)((...args) => port.postMessage(...args));
+    const serializedMessagePoster = withSerializer(serializer)((...args) =>
+      port.postMessage(...args)
+    );
 
     let prevState = store.getState();
 
@@ -130,20 +141,25 @@ export default (store, {
   };
 
   const withPayloadDeserializer = withDeserializer(deserializer);
-  const shouldDeserialize = (request) => request.type === DISPATCH_TYPE && request.portName === portName;
+  const shouldDeserialize = (request) =>
+    request.type === DISPATCH_TYPE && request.portName === portName;
 
   /**
    * Setup action handler
    */
-  withPayloadDeserializer((...args) => browserAPI.runtime.onMessage.addListener(...args))(dispatchResponse, shouldDeserialize);
+  withPayloadDeserializer((...args) =>
+    browserAPI.runtime.onMessage.addListener(...args)
+  )(dispatchResponse, shouldDeserialize);
 
   /**
    * Setup external action handler
    */
   if (browserAPI.runtime.onMessageExternal) {
-    withPayloadDeserializer((...args) => browserAPI.runtime.onMessageExternal.addListener(...args))(dispatchResponse, shouldDeserialize);
+    withPayloadDeserializer((...args) =>
+      browserAPI.runtime.onMessageExternal.addListener(...args)
+    )(dispatchResponse, shouldDeserialize);
   } else {
-    console.warn('runtime.onMessageExternal is not supported');
+    console.warn("runtime.onMessageExternal is not supported");
   }
 
   /**
@@ -157,7 +173,7 @@ export default (store, {
   if (browserAPI.runtime.onConnectExternal) {
     browserAPI.runtime.onConnectExternal.addListener(connectState);
   } else {
-    console.warn('runtime.onConnectExternal is not supported');
+    console.warn("runtime.onConnectExternal is not supported");
   }
 
   /**
@@ -177,5 +193,4 @@ export default (store, {
   // For non-tab based
   // TODO: Find use case for this. Ommiting until then.
   // browserAPI.runtime.sendMessage(null, {action: 'storeReady'});
-
 };

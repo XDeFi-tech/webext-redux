@@ -1,4 +1,7 @@
+import cloneDeep from "lodash.clonedeep";
+
 export const noop = (payload) => payload;
+export const cloneDeepSerializer = (payload) => cloneDeep(payload);
 
 const transformPayload = (message, transformer = noop) => ({
   ...message,
@@ -6,10 +9,14 @@ const transformPayload = (message, transformer = noop) => ({
   // just return a copy of the message.
   // We return a copy rather than the original message so that we're not
   // mutating the original action object.
-  ...(message.payload ? {payload: transformer(message.payload)} : {})
+  ...(message.payload ? { payload: transformer(message.payload) } : {}),
 });
 
-const deserializeListener = (listener, deserializer = noop, shouldDeserialize) => {
+const deserializeListener = (
+  listener,
+  deserializer = noop,
+  shouldDeserialize
+) => {
   // If a shouldDeserialize function is passed, return a function that uses it
   // to check if any given message payload should be deserialized
   if (shouldDeserialize) {
@@ -21,7 +28,8 @@ const deserializeListener = (listener, deserializer = noop, shouldDeserialize) =
     };
   }
   // Otherwise, return a function that tries to deserialize on every message
-  return (message, ...args) => listener(transformPayload(message, deserializer), ...args);
+  return (message, ...args) =>
+    listener(transformPayload(message, deserializer), ...args);
 };
 
 /**
@@ -60,10 +68,13 @@ const deserializeListener = (listener, deserializer = noop, shouldDeserialize) =
  *   chrome.runtime.sendMessage("{'payload':{'prop':4}}");
  *   //Payload: "{'prop':4}";
  */
-export const withDeserializer = (deserializer = noop) =>
-  (addListenerFn) =>
-    (listener, shouldDeserialize) =>
-      addListenerFn(deserializeListener(listener, deserializer, shouldDeserialize));
+export const withDeserializer =
+  (deserializer = noop) =>
+    (addListenerFn) =>
+      (listener, shouldDeserialize) =>
+        addListenerFn(
+          deserializeListener(listener, deserializer, shouldDeserialize)
+        );
 
 /**
  * Given a serializer, returns a function that takes a message sending
@@ -79,14 +90,20 @@ export const withDeserializer = (deserializer = noop) =>
  *   serializedChromeSender({ payload: { prop: 4 }})
  *   //Payload: "{'prop':4}"
  */
-export const withSerializer = (serializer = noop) =>
-  (sendMessageFn, messageArgIndex = 0) => {
-    return (...args) => {
-      if (args.length <= messageArgIndex) {
-        throw new Error(`Message in request could not be serialized. ` +
-                        `Expected message in position ${messageArgIndex} but only received ${args.length} args.`);
-      }
-      args[messageArgIndex] = transformPayload(args[messageArgIndex], serializer);
-      return sendMessageFn(...args);
+export const withSerializer =
+  (serializer = noop) =>
+    (sendMessageFn, messageArgIndex = 0) => {
+      return (...args) => {
+        if (args.length <= messageArgIndex) {
+          throw new Error(
+            `Message in request could not be serialized. ` +
+            `Expected message in position ${messageArgIndex} but only received ${args.length} args.`
+          );
+        }
+        args[messageArgIndex] = transformPayload(
+          args[messageArgIndex],
+          serializer
+        );
+        return sendMessageFn(...args);
+      };
     };
-  };
